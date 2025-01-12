@@ -1,0 +1,36 @@
+server:
+  port: 9650
+spring:
+  application:
+    name: spring-batch-demo
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://localhost:3306/batch_demo
+    username: saber66
+    password: AdminSaber66
+    type: com.mysql.cj.jdbc.MysqlDataSource
+    hikari:
+      transaction-isolation: TRANSACTION_READ_COMMITTED
+      maximum-pool-size: 8
+      minimum-idle: 3
+      max-lifetime: 15000
+  jpa:
+    show-sql: true
+    hibernate:
+      naming:
+        physical-strategy: org.hibernate.boot.model.naming.PhysicalNamingStrategyStandardImpl
+      ddl-auto: create-drop
+    properties:
+      hibernate:
+        show_sql: true
+        format_sql: true
+        dialect: org.hibernate.dialect.MySQLDialect
+    database-platform: org.hibernate.dialect.MySQLDialect
+  batch:
+    job:
+      enabled: false
+      name: customerJob
+    jdbc:
+      isolation-level-for-create: default
+      initialize-schema: always
+
