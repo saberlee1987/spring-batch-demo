@@ -29,8 +29,10 @@ spring:
   batch:
     job:
       enabled: false
-      name: customerJob
     jdbc:
       isolation-level-for-create: default
       initialize-schema: always
 
+  sql:
+    init:
+      mode: always

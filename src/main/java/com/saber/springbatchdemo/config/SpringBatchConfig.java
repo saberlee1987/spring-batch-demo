@@ -3,15 +3,16 @@ package com.saber.springbatchdemo.config;
 import com.saber.springbatchdemo.model.Customer;
 import com.saber.springbatchdemo.processes.CustomerProcessor;
 import com.saber.springbatchdemo.repositories.CustomerRepository;
-import lombok.AllArgsConstructor;
 import org.springframework.batch.core.Job;
 import org.springframework.batch.core.Step;
-import org.springframework.batch.core.configuration.annotation.EnableBatchProcessing;
 import org.springframework.batch.core.job.builder.JobBuilder;
 import org.springframework.batch.core.launch.support.RunIdIncrementer;
 import org.springframework.batch.core.repository.JobRepository;
 import org.springframework.batch.core.step.builder.StepBuilder;
 import org.springframework.batch.item.data.RepositoryItemWriter;
+import org.springframework.batch.item.database.BeanPropertyItemSqlParameterSourceProvider;
+import org.springframework.batch.item.database.JdbcBatchItemWriter;
+import org.springframework.batch.item.database.builder.JdbcBatchItemWriterBuilder;
 import org.springframework.batch.item.file.FlatFileItemReader;
 import org.springframework.batch.item.file.LineMapper;
 import org.springframework.batch.item.file.mapping.BeanWrapperFieldSetMapper;
@@ -20,15 +21,23 @@ import org.springframework.batch.item.file.transform.DelimitedLineTokenizer;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.io.ClassPathResource;
+import org.springframework.core.task.SimpleAsyncTaskExecutor;
+import org.springframework.core.task.TaskExecutor;
 import org.springframework.transaction.PlatformTransactionManager;
 
+import javax.sql.DataSource;
+
 @Configuration
-@EnableBatchProcessing
-@AllArgsConstructor
 public class SpringBatchConfig {
 
-    private final CustomerRepository customerRepository;
-
+    @Bean
+    public JdbcBatchItemWriter<Customer> writer(DataSource dataSource) {
+        return new JdbcBatchItemWriterBuilder<Customer>()
+                .itemSqlParameterSourceProvider(new BeanPropertyItemSqlParameterSourceProvider<>())
+                .sql("insert into customers(contractNo, country, dob, email, firstName, gender, lastName) values (:contractNo, :country, :dob, :email, :firstName, :gender, :lastName)")
+                .dataSource(dataSource)
+                .build();
+    }
     @Bean
     public FlatFileItemReader<Customer> itemReader() {
         FlatFileItemReader<Customer> itemReader = new FlatFileItemReader<>();
@@ -62,19 +71,28 @@ public class SpringBatchConfig {
     }
 
     @Bean
-    public RepositoryItemWriter<Customer> customerRepositoryItemWriter() {
+    public RepositoryItemWriter<Customer> customerRepositoryItemWriterJPa(CustomerRepository customerRepository) {
         RepositoryItemWriter<Customer> customerRepositoryItemWriter = new RepositoryItemWriter<>();
         customerRepositoryItemWriter.setRepository(customerRepository);
         return customerRepositoryItemWriter;
     }
-
+@Bean
+public JdbcBatchItemWriter<Customer> customerRepositoryItemWriter(DataSource dataSource) {
+    return new JdbcBatchItemWriterBuilder<Customer>()
+            .itemSqlParameterSourceProvider(new BeanPropertyItemSqlParameterSourceProvider<>())
+            .sql("insert into customers(contractNo, country, dob, email, firstName, gender, lastName) values (:contractNo, :country, :dob, :email, :firstName, :gender, :lastName)")
+            .dataSource(dataSource)
+            .build();
+}
     @Bean
-    public Step customerStepCsv(JobRepository jobRepository, PlatformTransactionManager transactionManager) {
+    public Step customerStepCsv(JobRepository jobRepository, PlatformTransactionManager transactionManager
+    ,CustomerRepository customerRepository) {
         return new StepBuilder("customerCsvStep", jobRepository)
                 .<Customer, Customer>chunk(5, transactionManager)
                 .reader(itemReader())
                 .processor(customerProcessor())
-                .writer(customerRepositoryItemWriter())
+                .writer(customerRepositoryItemWriterJPa(customerRepository))
+                .taskExecutor(taskExecutorCustomerJob())
                 .build();
     }
 
@@ -86,4 +104,9 @@ public class SpringBatchConfig {
                 .end().build();
     }
 
+    public TaskExecutor taskExecutorCustomerJob() {
+        SimpleAsyncTaskExecutor simpleAsyncTaskExecutor = new SimpleAsyncTaskExecutor();
+        simpleAsyncTaskExecutor.setConcurrencyLimit(10);
+        return simpleAsyncTaskExecutor;
+    }
 }
